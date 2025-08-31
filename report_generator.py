@@ -85,7 +85,8 @@ def generate_report(data, logo_path=None, images=[]):
     # ======================
     # Kolum kanan
     # ======================
-    y2 = height - 100
+    # Mulakan dari paras selepas tajuk (supaya tak bertindih)
+    y2 = y + (h_title + 4) + (3*line_h)
 
     c.setFont("Helvetica-Bold", 11)
     c.drawString(right_x, y2, "Sasaran / Peserta:")

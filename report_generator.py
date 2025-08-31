@@ -1,164 +1,146 @@
-
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
+from reportlab.lib import colors
 from reportlab.lib.units import cm
-from reportlab.lib import utils
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.platypus import Paragraph
-from reportlab.lib.enums import TA_LEFT
-from reportlab.lib.colors import HexColor
+from reportlab.lib.styles import getSampleStyleSheet
 
-def _scale_image(path, max_w, max_h):
-    img = utils.ImageReader(path)
-    iw, ih = img.getSize()
-    scale = min(max_w / iw, max_h / ih)
-    return img, iw*scale, ih*scale
+import io
 
+# Fungsi helper untuk bungkus teks panjang
 def draw_wrapped_paragraph(c, text, x, y, max_width, leading=14, font_name="Helvetica", font_size=11):
-    # Use Platypus Paragraph for clean wrapping and bullet support
-    style = ParagraphStyle(
-        "body",
-        fontName=font_name,
-        fontSize=font_size,
-        leading=leading,
-        textColor=HexColor("#222222"),
-        alignment=TA_LEFT,
-    )
-    p = Paragraph(text.replace("\n", "<br/>"), style)
-    w, h = p.wrap(max_width, 1000*cm)
+    styles = getSampleStyleSheet()
+    style = styles["Normal"]
+    style.fontName = font_name
+    style.fontSize = font_size
+    style.leading = leading
+
+    p = Paragraph(text, style)
+    w, h = p.wrap(max_width, 1000)  # wrap ikut lebar
     p.drawOn(c, x, y - h)
     return h
 
-def generate_pdf(buffer, data):
-    # Page setup
-    PAGE_W, PAGE_H = A4
-    MARGIN_L = 2.0*cm
-    MARGIN_R = 2.0*cm
-    CONTENT_W = PAGE_W - MARGIN_L - MARGIN_R
-
+def generate_report(data, logo_path=None, images=[]):
+    buffer = io.BytesIO()
     c = canvas.Canvas(buffer, pagesize=A4)
-    c.setTitle("One Page Report")
+    width, height = A4
 
-    # Header bar
-    c.setFillColor(HexColor("#0B5ED7"))
-    c.rect(0, PAGE_H-2.0*cm, PAGE_W, 2.0*cm, stroke=0, fill=1)
+    # --- Header bar biru ---
+    c.setFillColorRGB(0.2, 0.4, 0.8)
+    c.rect(0, height-50, width, 50, fill=True, stroke=False)
+    c.setFillColor(colors.white)
+    c.setFont("Helvetica-Bold", 16)
+    c.drawCentredString(width/2, height-35, "LAPORAN RINGKAS PROGRAM")
 
-    # Logo (left) if provided
-    y_header_mid = PAGE_H-1.0*cm
-    x_logo = MARGIN_L
-    if data.get("logo_path"):
+    # --- Logo (jika ada) ---
+    if logo_path:
         try:
-            img, w, h = _scale_image(data["logo_path"], 2.0*cm, 1.6*cm)
-            c.drawImage(img, x_logo, PAGE_H-1.8*cm + (1.8*cm-h)/2, width=w, height=h, mask='auto')
-        except Exception:
+            c.drawImage(logo_path, 30, height-80, width=60, height=60, preserveAspectRatio=True, mask="auto")
+        except:
             pass
 
-    # Title
-    c.setFillColor(HexColor("#FFFFFF"))
-    c.setFont("Helvetica-Bold", 16)
-    c.drawString(MARGIN_L + 2.3*cm, PAGE_H-1.15*cm, "ONE PAGE REPORT (OPR)")
+    # --- Kedudukan content ---
+    left_x = 2*cm
+    right_x = width/2 + 1*cm
+    y = height - 100
+    line_h = 16
+    CONTENT_W = width - 4*cm  # guna untuk wrap text
 
-    # Subheader line
-    c.setFillColor(HexColor("#0B5ED7"))
-    c.rect(0, PAGE_H-2.05*cm, PAGE_W, 0.05*cm, stroke=0, fill=1)
-
-    # Body
-    c.setFillColor(HexColor("#111111"))
-    y = PAGE_H - 2.6*cm
-
-    # Key info grid (left/right columns)
-    left_x = MARGIN_L
-    right_x = PAGE_W/2 + 0.3*cm
-    line_h = 14
-
+    # ======================
+    # Kolum kiri
+    # ======================
+    # Tajuk Program (wrap)
     c.setFont("Helvetica-Bold", 11)
     c.drawString(left_x, y, "Tajuk Program:")
     c.setFont("Helvetica", 11)
-    c.drawString(left_x + 3.3*cm, y, data.get("title","-"))
-    y -= line_h
+    title_text = data.get("title", "-")
+    max_w_title = CONTENT_W/2.0 - 3.3*cm
+    h_title = draw_wrapped_paragraph(
+        c, title_text, left_x + 3.3*cm, y, max_w_title,
+        leading=13, font_name="Helvetica", font_size=11
+    )
+    y -= (h_title + 4)
 
+    # Tarikh/Masa
     c.setFont("Helvetica-Bold", 11)
     c.drawString(left_x, y, "Tarikh / Masa:")
     c.setFont("Helvetica", 11)
-    c.drawString(left_x + 3.3*cm, y, f'{data.get("date","-")} / {data.get("time","-")}')
+    c.drawString(left_x + 3.3*cm, y, data.get("date_time", "-"))
     y -= line_h
 
+    # Tempat
     c.setFont("Helvetica-Bold", 11)
     c.drawString(left_x, y, "Tempat:")
     c.setFont("Helvetica", 11)
-    c.drawString(left_x + 3.3*cm, y, data.get("venue","-"))
+    c.drawString(left_x + 3.3*cm, y, data.get("place", "-"))
     y -= line_h
 
+    # Penganjur
     c.setFont("Helvetica-Bold", 11)
-    c.drawString(left_x, y, "Anjuran:")
+    c.drawString(left_x, y, "Penganjur:")
     c.setFont("Helvetica", 11)
-    c.drawString(left_x + 3.3*cm, y, data.get("organiser","-"))
+    c.drawString(left_x + 3.3*cm, y, data.get("organizer", "-"))
     y -= line_h
 
-    c.setFont("Helvetica-Bold", 11)
-    c.drawString(right_x, PAGE_H - 2.6*cm, "Sasaran / Peserta:")
-    c.setFont("Helvetica", 11)
-    c.drawString(right_x + 3.6*cm, PAGE_H - 2.6*cm, data.get("target","-"))
+    # ======================
+    # Kolum kanan
+    # ======================
+    y2 = height - 100
 
     c.setFont("Helvetica-Bold", 11)
-    c.drawString(right_x, PAGE_H - 2.6*cm - line_h, "Bil. Kehadiran:")
+    c.drawString(right_x, y2, "Sasaran / Peserta:")
     c.setFont("Helvetica", 11)
-    att = data.get("attendance", {})
-    att_str = f"Murid {att.get('students','-')}, Guru {att.get('teachers','-')}, Ibu Bapa {att.get('parents','-')}"
-    c.drawString(right_x + 3.6*cm, PAGE_H - 2.6*cm - line_h, att_str)
+    c.drawString(right_x + 4*cm, y2, data.get("audience", "-"))
+    y2 -= line_h
 
-    # Section blocks
-    y -= 10
-    sect_gap = 6
-    label_font = "Helvetica-Bold"
-    body_font = "Helvetica"
+    c.setFont("Helvetica-Bold", 11)
+    c.drawString(right_x, y2, "Bilangan Kehadiran:")
+    c.setFont("Helvetica", 11)
+    c.drawString(right_x + 4*cm, y2, data.get("attendance", "-"))
+    y2 -= line_h
 
-    def section(label, text):
-        nonlocal y
-        c.setFont(label_font, 11)
-        c.setFillColor(HexColor("#0B5ED7"))
-        c.drawString(left_x, y, label)
-        y -= 10
-        c.setFillColor(HexColor("#222222"))
-        h = draw_wrapped_paragraph(c, text or "-", left_x, y, CONTENT_W)
-        y -= (h + sect_gap)
+    # ======================
+    # Bahagian panjang (objektif, aktiviti, impak, cadangan)
+    # ======================
+    y3 = min(y, y2) - 10
+    sections = [
+        ("Objektif Program", data.get("objective","-")),
+        ("Aktiviti Program", data.get("activities","-")),
+        ("Impak Program", data.get("impact","-")),
+        ("Cadangan Penambahbaikan", data.get("suggestion","-")),
+    ]
 
-    section("Objektif Program", data.get("objectives",""))
-    section("Ringkasan Aktiviti / Atur Cara", data.get("activities",""))
-    section("Pencapaian / Impak", data.get("outcomes",""))
-    section("Cadangan / Penambahbaikan", data.get("recommendations",""))
+    for title, content in sections:
+        if y3 < 150:  # kalau nak habis page
+            c.showPage()
+            y3 = height - 80
 
-    # Images row (up to 3)
-    imgs = data.get("image_paths", [])[:3]
-    if imgs:
-        c.setFillColor(HexColor("#0B5ED7"))
-        c.setFont(label_font, 11)
-        c.drawString(left_x, y, "Gambar Program")
-        y -= 12
+        c.setFillColor(colors.HexColor("#3366cc"))
+        c.setFont("Helvetica-Bold", 12)
+        c.drawString(left_x, y3, title)
+        c.setFillColor(colors.black)
+        y3 -= 14
 
-        gap = 0.5*cm
-        each_w = (CONTENT_W - 2*gap) / 3.0 if len(imgs) >= 3 else (CONTENT_W - gap) / 2.0 if len(imgs)==2 else CONTENT_W
-        x = MARGIN_L
-        max_h = 5.0*cm
-        for p in imgs:
+        h = draw_wrapped_paragraph(c, content, left_x, y3, width-4*cm, leading=14)
+        y3 -= (h + 8)
+
+    # ======================
+    # Gambar (jika ada)
+    # ======================
+    if images:
+        y_img = y3 - 20
+        img_w = (width - 4*cm) / 3
+        img_h = 5*cm
+        x_img = left_x
+        for img in images[:3]:
             try:
-                img, w, h = _scale_image(p, each_w, max_h)
-                c.drawImage(img, x, y - h, width=w, height=h, mask='auto')
-                x += each_w + gap
-            except Exception:
+                c.drawImage(img, x_img, y_img, width=img_w, height=img_h, preserveAspectRatio=True, mask="auto")
+                x_img += img_w + 0.5*cm
+            except:
                 pass
-        y -= (max_h + 6)
-
-    # Footer - prepared by
-    c.setStrokeColor(HexColor("#DDDDDD"))
-    c.line(MARGIN_L, 2.5*cm, PAGE_W - MARGIN_R, 2.5*cm)
-    c.setFont("Helvetica", 10)
-    c.setFillColor(HexColor("#555555"))
-    c.drawString(MARGIN_L, 2.1*cm, f'Disediakan oleh: {data.get("prepared_by","-")} ({data.get("position","-")})')
-    c.drawString(MARGIN_L, 1.6*cm, f'Tarikh Laporan: {data.get("report_date","-")}')
-    c.drawRightString(PAGE_W - MARGIN_R, 1.6*cm, "Dijana automatik oleh Sistem OPR")
 
     c.showPage()
     c.save()
-    buffer.seek(0)
-    return buffer
+    pdf = buffer.getvalue()
+    buffer.close()
+    return pdf
